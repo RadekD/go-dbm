@@ -10,7 +10,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
-	dbm "dejnek.pl/go-dbm"
+	dbm "github.com/RadekD/go-dbm"
 )
 
 func setup(t *testing.T) dbm.DB {

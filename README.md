@@ -2,11 +2,11 @@
 
 Dead simple ORM-ish library inspired by Gorp
 
-`go get dejnek.pl/go-dbm`
+`go get github.com/RadekD/go-dbm`
 
 ## Usage
 ```go
-import "dejnek.pl/go-dbm"
+import "github.com/RadekD/go-dbm"
 
 func main() {
     dbPool, err := sql.Open("mysql", "root@tcp(127.0.0.1:3306)/test?collation=utf8mb4_unicode_ci&parseTime=true")

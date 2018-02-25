@@ -1,4 +1,4 @@
-package dbm // import "dejnek.pl/go-dbm"
+package dbm
 
 import (
 	"context"
