@@ -1,29 +1,21 @@
 package dbm_test
 
 import (
-	"context"
-	"database/sql"
-	"log"
 	"reflect"
-	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/RadekD/go-dbm"
 
 	_ "github.com/go-sql-driver/mysql"
-
-	dbm "github.com/RadekD/go-dbm"
 )
 
-func setup(t *testing.T) dbm.DB {
-	dbPool, err := sql.Open("mysql", "root@tcp(127.0.0.1:3306)/test?collation=utf8mb4_unicode_ci&parseTime=true")
+func setup(t *testing.T) *dbm.CRUD {
+	crud, err := dbm.Open("mysql", "root@tcp(127.0.0.1:3306)/test?collation=utf8mb4_unicode_ci&parseTime=true")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	db := &dbm.MySQL{
-		DB: dbPool,
-	}
-
-	return db
+	return crud
 }
 
 type JSONTest struct {
@@ -37,7 +29,7 @@ func equalTo(expected interface{}) func(t *testing.T, value interface{}) {
 		if expected != value {
 			t.Fatalf("got: %+v; expected: %+v", value, expected)
 		}
-		log.Printf("expected %T, %v, got: %v", expected, expected, value)
+		//log.Printf("expected %T, %v, got: %v", expected, expected, value)
 	}
 }
 
@@ -46,7 +38,7 @@ func equalSliceTo(expected interface{}) func(t *testing.T, value interface{}) {
 		if !reflect.DeepEqual(expected, value) {
 			t.Fatalf("expected %T, got: %v", expected, value)
 		}
-		log.Printf("expected %T, %v, got: %v", expected, expected, value)
+		//log.Printf("expected %T, %v, got: %v", expected, expected, value)
 	}
 }
 
@@ -81,67 +73,80 @@ func TestSelect(t *testing.T) {
 	}
 }
 
-func TestTransaction(t *testing.T) {
+type insert struct {
+	ID   int `db:",pk"`
+	Name string
+}
+
+func TestInsert(t *testing.T) {
 	db := setup(t)
 
-	var afterCommit int64
+	testInsert := insert{Name: "test"}
 
-	ctx, cancel := context.WithCancel(context.Background())
-
-	tx, err := db.BeginContext(ctx)
+	result, err := db.Insert("test", &testInsert)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	id, err := result.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if testInsert.ID != int(id) {
+		t.Fatalf("expected %T, got: %v", testInsert.ID, id)
+	}
 
-	go func() {
-		tx.IfCommited(func() {
-			atomic.AddInt64(&afterCommit, 1)
-			cancel()
-		})
-
-		err = tx.Commit()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}()
-
-	<-ctx.Done()
-
-	if atomic.LoadInt64(&afterCommit) != 1 {
-		t.Fatal("after commit failed")
+	_, err = db.Insert("test", 1235)
+	if err != dbm.ErrNotAStruct {
+		t.Fatal(err)
 	}
 }
 
-func TestInvalidTransaction(t *testing.T) {
+func TestUpdate(t *testing.T) {
 	db := setup(t)
 
-	var afterCommit int64
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	tx, err := db.BeginContext(ctx)
+	var sel insert
+	err := db.Select(&sel, "SELECT * FROM test WHERE ID = ?", 12)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
 
-	go func() {
-		tx.IfCommited(func() {
-			atomic.AddInt64(&afterCommit, 1)
-			cancel()
-		})
+	var randomstring = time.Now().String()
 
-		err = tx.Rollback()
-		if err != nil {
-			t.Fatal(err)
-		}
-		cancel()
-	}()
+	sel.Name = randomstring
 
-	<-ctx.Done()
+	result, err := db.Update("test", &sel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, err := result.RowsAffected(); err != nil || r != 1 {
+		t.Fatal(err)
+	}
 
-	if atomic.LoadInt64(&afterCommit) == 1 {
-		t.Fatal("after commit failed")
+	err = db.Select(&sel, "SELECT * FROM test WHERE ID = ?", 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sel.Name != randomstring {
+		t.Fatal("wrong update")
+	}
+
+}
+
+func TestDelete(t *testing.T) {
+	db := setup(t)
+
+	var sel insert
+	err := db.Select(&sel, "SELECT * FROM test WHERE ID = ?", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := db.Delete("test", &sel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = result.RowsAffected()
+	if err != nil {
+		t.Fatal(err)
 	}
 }
