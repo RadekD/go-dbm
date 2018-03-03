@@ -32,7 +32,7 @@ func (c *CRUD) Select(holder interface{}, query string, args ...interface{}) err
 // If holder is not a slice and query returns more than one row ErrTooManyRows will be returned
 // If holder is byte, int, string or bool and query returns a more than one column ErrTooManyColumns will be returned
 func (c *CRUD) SelectContext(ctx context.Context, holder interface{}, query string, args ...interface{}) error {
-	return selectAll(ctx, c, holder, query, args...)
+	return selectAll(ctx, c, holder, c.driver, query, args...)
 }
 
 // Insert created and performs INSERT INTO ... query

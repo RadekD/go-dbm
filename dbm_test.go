@@ -150,3 +150,14 @@ func TestDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestArraySelect(t *testing.T) {
+	db := setup(t)
+
+	var sel []struct{ ID int }
+	db.Select(&sel, "SELECT ID FROM test WHERE ID IN(?)", []int{2, 3, 4})
+
+	if len(sel) != 3 {
+		t.Fail()
+	}
+}

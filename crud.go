@@ -95,13 +95,17 @@ type queryer interface {
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 }
 
-func selectAll(ctx context.Context, db queryer, holder interface{}, query string, args ...interface{}) error {
+func selectAll(ctx context.Context, db queryer, holder interface{}, driver string, query string, args ...interface{}) error {
 	holderType := reflect.TypeOf(holder)
 	if holderType.Kind() != reflect.Ptr {
 		return fmt.Errorf("holder must be a pointer")
 	}
 	holderValue := reflect.ValueOf(holder).Elem()
 	baseType := holderType.Elem()
+
+	if driver == "mysql" && len(args) > 0 {
+		query, args = expandQuery(query, args)
+	}
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -151,6 +155,31 @@ func selectAll(ctx context.Context, db queryer, holder interface{}, query string
 		}
 	}
 	return rows.Err()
+}
+
+func expandQuery(query string, args []interface{}) (string, []interface{}) {
+	var newQuery string
+	var newArgs []interface{}
+
+	queryParts := strings.Split(query, "?")
+	for i, arg := range args {
+		if reflect.TypeOf(arg).Kind() == reflect.Slice {
+			len := reflect.ValueOf(arg).Len()
+
+			placeholders := strings.Repeat("?, ", len)[:(len*3)-2]
+			newQuery += queryParts[i] + placeholders
+
+			for j := 0; j < len; j++ {
+				newArgs = append(newArgs, reflect.ValueOf(args[i]).Index(j).Interface())
+			}
+		} else {
+			newQuery += queryParts[i] + "?"
+			newArgs = append(newArgs, args[i])
+		}
+	}
+	newQuery += queryParts[len(args)]
+
+	return newQuery, newArgs
 }
 
 func scanStruct(rows *sql.Rows, baseValue reflect.Value, baseType reflect.Type) error {
